@@ -155,6 +155,8 @@
 				yc.setAttribute('cx', cx); yc.setAttribute('cy', cyVal); yc.setAttribute('r', rvv);
 				yc.setAttribute('fill', '#fdf151'); yc.setAttribute('stroke', '#222222');
 				yc.setAttribute('stroke-width', '0.25'); yc.setAttribute('filter', 'url(#sh)');
+				yc.classList.add('bubble-anim');
+				yc.style.animationDuration = Math.max(rvv / 70, 0.05) + 's';
 				g.appendChild(yc);
 				const bc = document.createElementNS(ns, 'circle');
 				bc.setAttribute('cx', cx); bc.setAttribute('cy', cyBas); bc.setAttribute('r', rb);
@@ -171,6 +173,8 @@
 				yc.setAttribute('cx', cx); yc.setAttribute('cy', cyVal); yc.setAttribute('r', rvv);
 				yc.setAttribute('fill', '#fdf151'); yc.setAttribute('stroke', '#333333');
 				yc.setAttribute('stroke-width', '0.25');
+				yc.classList.add('bubble-anim');
+				yc.style.animationDuration = Math.max(rvv / 70, 0.05) + 's';
 				g.appendChild(yc);
 			}
 

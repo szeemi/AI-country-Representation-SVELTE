@@ -29,6 +29,19 @@ body {
 	padding: clamp(20px, 5vw, 60px) clamp(12px, 4vw, 32px) clamp(20px, 5vw, 60px);
 }
 
+/* ── BUBBLE ANIMATION ── */
+@keyframes bubble-grow {
+	from { transform: scale(0); }
+	to   { transform: scale(1); }
+}
+.bubble-anim {
+	transform-box: fill-box;
+	transform-origin: center;
+	animation-name: bubble-grow;
+	animation-timing-function: linear;
+	animation-fill-mode: both;
+}
+
 /* ── HEADER ── */
 .header {
 	width: 100%;
