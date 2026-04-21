@@ -61,9 +61,9 @@
 
 		// Bubble data
 		const maxRvv = Math.max(...DATA.map(d => rvFn(d.ratio)));
-		const speed  = maxRvv / 1500; // px per ms — biggest bubble = 1500ms
+		const speed  = maxRvv / 600; // px per ms — biggest bubble = 600ms
 
-		const bubbles = DATA.map((d, idx) => {
+		const bubblesRaw = DATA.map((d, idx) => {
 			const ri   = Math.floor(idx / COLS);
 			const ci   = idx % COLS;
 			const info = rows[ri];
@@ -87,6 +87,14 @@
 				name:    mb && ABBREV[d.country] ? ABBREV[d.country] : d.country,
 			};
 		});
+
+		// Stagger: biggest first, each starts after the previous finishes
+		const sorted = [...bubblesRaw].sort((a, b) => b.rvv - a.rvv);
+		let cumDelay = 2000;
+		const delayMap = new Map();
+		sorted.forEach(b => { delayMap.set(b.idx, cumDelay); cumDelay += b.animDur; });
+
+		const bubbles = bubblesRaw.map(b => ({ ...b, animDelay: delayMap.get(b.idx) }));
 
 		// Category runs
 		const catRuns = [];
@@ -124,12 +132,12 @@
 	});
 
 	// ── Grow animation via Web Animations API ──
-	function growAnim(node, { duration }) {
+	function growAnim(node, { duration, delay }) {
 		node.style.transformBox = 'fill-box';
 		node.style.transformOrigin = 'center bottom';
 		const anim = node.animate(
 			[{ transform: 'scale(0)' }, { transform: 'scale(1)' }],
-			{ duration, delay: 2000, easing: 'linear', fill: 'both' }
+			{ duration, delay, easing: 'linear', fill: 'both' }
 		);
 		return { destroy() { anim.cancel(); } };
 	}
@@ -259,7 +267,7 @@
 
 				{#if b.over1}
 					<circle
-						use:growAnim={{ duration: b.animDur }}
+						use:growAnim={{ duration: b.animDur, delay: b.animDelay }}
 						cx={b.cx} cy={b.cyVal} r={b.rvv}
 						fill="#fdf151" stroke="#222222" stroke-width="0.25" filter="url(#sh)"
 					/>
@@ -273,7 +281,7 @@
 						fill="#333333" stroke="#333333" stroke-width="0.25" pointer-events="none"
 					/>
 					<circle
-						use:growAnim={{ duration: b.animDur }}
+						use:growAnim={{ duration: b.animDur, delay: b.animDelay }}
 						cx={b.cx} cy={b.cyVal} r={b.rvv}
 						fill="#fdf151" stroke="#333333" stroke-width="0.25"
 					/>
