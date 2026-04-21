@@ -164,9 +164,11 @@
 		return { destroy() { anim.cancel(); } };
 	}
 
-	const LEGEND_DUR   = 600;
-	const LEGEND_DELAY = 500;
-	const LEGEND_LABEL_DELAY = LEGEND_DELAY + LEGEND_DUR; // when bubble finishes
+	const LEGEND_DARK_LINE_DELAY  = 500;              // dark line+text start
+	const LEGEND_DARK_LINE_DUR    = 400;
+	const LEGEND_DELAY            = LEGEND_DARK_LINE_DELAY + LEGEND_DARK_LINE_DUR; // yellow bubble starts after dark label done
+	const LEGEND_DUR              = 600;
+	const LEGEND_LABEL_DELAY      = LEGEND_DELAY + LEGEND_DUR; // yellow label after bubble finishes
 
 	// ── Replay key (R to restart) ──
 	let animKey = $state(0);
@@ -268,10 +270,18 @@
 				x="118" y="12" font-family="PT Sans, sans-serif" font-size={layout.legendFs} fill="#555" dominant-baseline="middle"
 			>actual funding</text>
 		{/key}
-		<!-- Static elements -->
+		<!-- Dark bubble always visible; line + text animate in first -->
 		<circle cx="50" cy="74" r="26" fill="#333333" stroke="none" />
-		<line x1="50" y1="48" x2="114" y2="48" stroke="#333333" stroke-width="1" />
-		<text x="118" y="48" font-family="PT Sans, sans-serif" font-size={layout.legendFs} fill="#555" dominant-baseline="middle">expected funding</text>
+		{#key animKey}
+			<line
+				use:drawLine={{ delay: LEGEND_DARK_LINE_DELAY }}
+				x1="50" y1="48" x2="114" y2="48" stroke="#333333" stroke-width="1"
+			/>
+			<text
+				use:fadeIn={{ delay: LEGEND_DARK_LINE_DELAY }}
+				x="118" y="48" font-family="PT Sans, sans-serif" font-size={layout.legendFs} fill="#555" dominant-baseline="middle"
+			>expected funding</text>
+		{/key}
 	</svg>
 </div>
 
