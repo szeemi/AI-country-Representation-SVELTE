@@ -60,6 +60,9 @@
 		const totalH = last.lineY + LINE_H + CAT_LABEL_GAP + CAT_FONT_H + 10;
 
 		// Bubble data
+		const maxRvv = Math.max(...DATA.map(d => rvFn(d.ratio)));
+		const speed  = maxRvv / 1500; // px per ms — biggest bubble = 1500ms
+
 		const bubbles = DATA.map((d, idx) => {
 			const ri   = Math.floor(idx / COLS);
 			const ci   = idx % COLS;
@@ -80,7 +83,7 @@
 				over1, bigR, bigCY, bigTop, hitTop, hitBot,
 				vSz:     ratioSzFn(bigR),
 				nameY:   info.nameY,
-				animDur: Math.max(rvv / 70, 0.05) * 1000,
+				animDur: Math.max(rvv / speed, 50),
 				name:    mb && ABBREV[d.country] ? ABBREV[d.country] : d.country,
 			};
 		});
@@ -120,14 +123,27 @@
 		return { bubbles, catRuns, totalH, SVG_W, NAME_FONT, legendFs: mb ? 24 : 15 };
 	});
 
-	// ── Grow transition (linear, same px/s for all bubbles) ──
-	function growIn(node, { duration }) {
-		return {
-			duration,
-			easing: t => t,
-			css: t => `transform-box: fill-box; transform-origin: center; transform: scale(${t})`,
-		};
+	// ── Grow animation via Web Animations API ──
+	function growAnim(node, { duration }) {
+		node.style.transformBox = 'fill-box';
+		node.style.transformOrigin = 'center bottom';
+		const anim = node.animate(
+			[{ transform: 'scale(0)' }, { transform: 'scale(1)' }],
+			{ duration, delay: 2000, easing: 'linear', fill: 'both' }
+		);
+		return { destroy() { anim.cancel(); } };
 	}
+
+	// ── Replay key (R to restart) ──
+	let animKey = $state(0);
+
+	$effect(() => {
+		function onKey(e) {
+			if (e.key === 'r' || e.key === 'R') animKey++;
+		}
+		window.addEventListener('keydown', onKey);
+		return () => window.removeEventListener('keydown', onKey);
+	});
 
 	// ── Tooltip ──
 	function showTip(b) {
@@ -224,6 +240,7 @@
 			</filter>
 		</defs>
 
+		{#key animKey}
 		{#each layout.bubbles as b (b.idx)}
 			<g
 				style="cursor:pointer"
@@ -242,7 +259,7 @@
 
 				{#if b.over1}
 					<circle
-						in:growIn={{ duration: b.animDur }}
+						use:growAnim={{ duration: b.animDur }}
 						cx={b.cx} cy={b.cyVal} r={b.rvv}
 						fill="#fdf151" stroke="#222222" stroke-width="0.25" filter="url(#sh)"
 					/>
@@ -256,7 +273,7 @@
 						fill="#333333" stroke="#333333" stroke-width="0.25" pointer-events="none"
 					/>
 					<circle
-						in:growIn={{ duration: b.animDur }}
+						use:growAnim={{ duration: b.animDur }}
 						cx={b.cx} cy={b.cyVal} r={b.rvv}
 						fill="#fdf151" stroke="#333333" stroke-width="0.25"
 					/>
@@ -287,6 +304,7 @@
 				>{b.name}</text>
 			</g>
 		{/each}
+		{/key}
 
 		<!-- Category lines -->
 		{#each layout.catRuns as run (run.key)}
