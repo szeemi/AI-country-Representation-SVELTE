@@ -60,9 +60,6 @@
 		const totalH = last.lineY + LINE_H + CAT_LABEL_GAP + CAT_FONT_H + 10;
 
 		// Bubble data
-		const maxRvv = Math.max(...DATA.map(d => rvFn(d.ratio)));
-		const speed  = maxRvv / 300; // px per ms — biggest bubble = 300ms
-
 		const bubblesRaw = DATA.map((d, idx) => {
 			const ri   = Math.floor(idx / COLS);
 			const ci   = idx % COLS;
@@ -83,18 +80,18 @@
 				over1, bigR, bigCY, bigTop, hitTop, hitBot,
 				vSz:     ratioSzFn(bigR),
 				nameY:   info.nameY,
-				animDur: Math.max(rvv / speed, 50),
+				animDur: 0, // overridden below
 				name:    mb && ABBREV[d.country] ? ABBREV[d.country] : d.country,
 			};
 		});
 
-		// Stagger: biggest first, each starts after the previous finishes
-		const sorted = [...bubblesRaw].sort((a, b) => b.rvv - a.rvv);
-		let cumDelay = 2000;
-		const delayMap = new Map();
-		sorted.forEach(b => { delayMap.set(b.idx, cumDelay); cumDelay += b.animDur; });
+		// All bubbles start and end together
+		const BUBBLE_DUR = 1000;
+		const bubbles = bubblesRaw.map(b => ({ ...b, animDelay: CHART_START_DELAY, animDur: BUBBLE_DUR }));
 
-		const bubbles = bubblesRaw.map(b => ({ ...b, animDelay: delayMap.get(b.idx) }));
+		const lastBubbleEnd = CHART_START_DELAY + BUBBLE_DUR + 1500; // 1.5s pause before categories
+		const catOrder = { over: 0, inline: 1, under: 2 };
+		const CAT_BAR_STEP = 1200; // ms between each category group
 
 		// Category runs
 		const catRuns = [];
@@ -124,6 +121,7 @@
 					cfg, lx, lw, midX: lx + lw / 2,
 					lineY: info.lineY, LINE_H, labelText, CAT_FONT, CAT_LABEL_GAP,
 					showLabel: labelText.length * CAT_FONT * 0.82 < lw - 6,
+					catDelay: lastBubbleEnd + catOrder[run.cat] * CAT_BAR_STEP,
 				});
 			});
 		});
@@ -154,21 +152,36 @@
 		return { destroy() { anim.cancel(); } };
 	}
 
-	// ── Fade in ──
-	function fadeIn(node, { delay }) {
-		node.style.opacity = 0;
+	// ── Grow bar left→right ──
+	function growBar(node, { delay }) {
+		node.style.transformBox = 'fill-box';
+		node.style.transformOrigin = 'left center';
+		node.style.transform = 'scaleX(0)';
 		const anim = node.animate(
-			[{ opacity: 0 }, { opacity: 1 }],
-			{ duration: 300, delay, easing: 'ease', fill: 'both' }
+			[{ transform: 'scaleX(0)' }, { transform: 'scaleX(1)' }],
+			{ duration: 400, delay, easing: 'ease-out', fill: 'both' }
 		);
 		return { destroy() { anim.cancel(); } };
 	}
 
-	const LEGEND_DARK_LINE_DELAY  = 500;              // dark line+text start
+	// ── Fade in ──
+	function fadeIn(node, { delay, duration = 300 }) {
+		node.style.opacity = 0;
+		const anim = node.animate(
+			[{ opacity: 0 }, { opacity: 1 }],
+			{ duration, delay, easing: 'ease', fill: 'both' }
+		);
+		return { destroy() { anim.cancel(); } };
+	}
+
+	const LEGEND_PRE_PAUSE        = 2000;             // pause before legend starts
+	const LEGEND_DARK_LINE_DELAY  = LEGEND_PRE_PAUSE;
 	const LEGEND_DARK_LINE_DUR    = 400;
-	const LEGEND_DELAY            = LEGEND_DARK_LINE_DELAY + LEGEND_DARK_LINE_DUR; // yellow bubble starts after dark label done
+	const LEGEND_DELAY            = LEGEND_DARK_LINE_DELAY + LEGEND_DARK_LINE_DUR;
 	const LEGEND_DUR              = 600;
-	const LEGEND_LABEL_DELAY      = LEGEND_DELAY + LEGEND_DUR; // yellow label after bubble finishes
+	const LEGEND_LABEL_DELAY      = LEGEND_DELAY + LEGEND_DUR;
+	const LEGEND_POST_PAUSE       = 1000;             // pause after legend before chart
+	const CHART_START_DELAY       = LEGEND_LABEL_DELAY + 300 + LEGEND_POST_PAUSE;
 
 	// ── Replay key (R to restart) ──
 	let animKey = $state(0);
@@ -244,7 +257,7 @@
 <div class="header">
 	<div>
 		<div class="eyebrow">EU AI Ecosystem · 2025 · Geographic Analysis</div>
-		<h1>Countries<br />Over &amp; Under<br />Represented<span class="trail">_</span></h1>
+		<h1>Countries<br />Over &amp; Under<br />Represented<br />in AI Funding<span class="trail">_</span></h1>
 		<p class="subtitle">Actual vs GDP-Weighted Expected Funding</p>
 	</div>
 	<div class="yblock"></div>
@@ -354,8 +367,9 @@
 					pointer-events="none"
 				/>
 
-				<!-- Ratio label -->
+				<!-- Ratio label — fades in when its yellow bubble finishes -->
 				<text
+					use:fadeIn={{ delay: b.animDelay + b.animDur }}
 					x={b.cx} y={b.bigTop - 7}
 					text-anchor="middle" font-size={b.vSz}
 					font-family="PT Sans, sans-serif" font-weight="700"
@@ -373,11 +387,16 @@
 		{/each}
 		{/key}
 
-		<!-- Category lines -->
+		<!-- Category lines — appear after all bubbles, one group at a time -->
+		{#key animKey}
 		{#each layout.catRuns as run (run.key)}
-			<rect x={run.lx} y={run.lineY} width={run.lw} height={run.LINE_H} fill={run.cfg.fill} />
+			<rect
+				use:fadeIn={{ delay: run.catDelay, duration: 800 }}
+				x={run.lx} y={run.lineY} width={run.lw} height={run.LINE_H} fill={run.cfg.fill}
+			/>
 			{#if run.showLabel}
 				<text
+					use:fadeIn={{ delay: run.catDelay, duration: 800 }}
 					x={run.midX} y={run.lineY + run.LINE_H + run.CAT_LABEL_GAP}
 					text-anchor="middle" dominant-baseline="hanging"
 					font-size={run.CAT_FONT} font-family="Chaney, sans-serif"
@@ -385,6 +404,7 @@
 				>{run.labelText}</text>
 			{/if}
 		{/each}
+		{/key}
 	</svg>
 </div>
 
