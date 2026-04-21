@@ -61,7 +61,7 @@
 
 		// Bubble data
 		const maxRvv = Math.max(...DATA.map(d => rvFn(d.ratio)));
-		const speed  = maxRvv / 600; // px per ms — biggest bubble = 600ms
+		const speed  = maxRvv / 300; // px per ms — biggest bubble = 300ms
 
 		const bubblesRaw = DATA.map((d, idx) => {
 			const ri   = Math.floor(idx / COLS);
@@ -141,6 +141,32 @@
 		);
 		return { destroy() { anim.cancel(); } };
 	}
+
+	// ── Draw line left→right ──
+	function drawLine(node, { delay }) {
+		const len = node.getTotalLength ? node.getTotalLength() : 64;
+		node.style.strokeDasharray = len;
+		node.style.strokeDashoffset = len;
+		const anim = node.animate(
+			[{ strokeDashoffset: len }, { strokeDashoffset: 0 }],
+			{ duration: 400, delay, easing: 'ease-out', fill: 'both' }
+		);
+		return { destroy() { anim.cancel(); } };
+	}
+
+	// ── Fade in ──
+	function fadeIn(node, { delay }) {
+		node.style.opacity = 0;
+		const anim = node.animate(
+			[{ opacity: 0 }, { opacity: 1 }],
+			{ duration: 300, delay, easing: 'ease', fill: 'both' }
+		);
+		return { destroy() { anim.cancel(); } };
+	}
+
+	const LEGEND_DUR   = 600;
+	const LEGEND_DELAY = 500;
+	const LEGEND_LABEL_DELAY = LEGEND_DELAY + LEGEND_DUR; // when bubble finishes
 
 	// ── Replay key (R to restart) ──
 	let animKey = $state(0);
@@ -225,11 +251,26 @@
 <!-- LEGEND -->
 <div class="legend">
 	<svg id="legend-svg" width="700" height="104" viewBox="0 0 700 104" style="display:block;width:100%;overflow:visible">
-		<circle cx="50" cy="56" r="44" fill="#fdf151" stroke="#222222" stroke-width="0.25" />
+		{#key animKey}
+			<!-- Yellow bubble grows first -->
+			<circle
+				use:growAnim={{ duration: LEGEND_DUR, delay: LEGEND_DELAY }}
+				cx="50" cy="56" r="44" fill="#fdf151" stroke="#222222" stroke-width="0.25"
+			/>
+			<!-- Line draws from circle top → text, after bubble finishes -->
+			<line
+				use:drawLine={{ delay: LEGEND_LABEL_DELAY }}
+				x1="50" y1="12" x2="114" y2="12" stroke="#333333" stroke-width="1"
+			/>
+			<!-- "actual funding" fades in with the line -->
+			<text
+				use:fadeIn={{ delay: LEGEND_LABEL_DELAY }}
+				x="118" y="12" font-family="PT Sans, sans-serif" font-size={layout.legendFs} fill="#555" dominant-baseline="middle"
+			>actual funding</text>
+		{/key}
+		<!-- Static elements -->
 		<circle cx="50" cy="74" r="26" fill="#333333" stroke="none" />
-		<line x1="50" y1="12" x2="114" y2="12" stroke="#333333" stroke-width="1" />
 		<line x1="50" y1="48" x2="114" y2="48" stroke="#333333" stroke-width="1" />
-		<text x="118" y="12" font-family="PT Sans, sans-serif" font-size={layout.legendFs} fill="#555" dominant-baseline="middle">actual funding</text>
 		<text x="118" y="48" font-family="PT Sans, sans-serif" font-size={layout.legendFs} fill="#555" dominant-baseline="middle">expected funding</text>
 	</svg>
 </div>
@@ -266,14 +307,22 @@
 				/>
 
 				{#if b.over1}
+					<!-- Solid dark base — visible immediately with correct colour -->
+					<circle
+						cx={b.cx} cy={b.cyBas} r={b.rb}
+						fill="#333333" stroke="none" pointer-events="none"
+					/>
+					<!-- Yellow grows on top -->
 					<circle
 						use:growAnim={{ duration: b.animDur, delay: b.animDelay }}
 						cx={b.cx} cy={b.cyVal} r={b.rvv}
 						fill="#fdf151" stroke="#222222" stroke-width="0.25" filter="url(#sh)"
 					/>
+					<!-- Semi-transparent dark overlay fades in only after yellow is done -->
 					<circle
+						use:fadeIn={{ delay: b.animDelay + b.animDur }}
 						cx={b.cx} cy={b.cyBas} r={b.rb}
-						fill="#333333" fill-opacity="0.10" stroke="none" pointer-events="none"
+						fill="#333333" fill-opacity="0.30" stroke="none" pointer-events="none"
 					/>
 				{:else}
 					<circle
