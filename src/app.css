@@ -99,6 +99,21 @@ h1 {
 	user-select: none;
 }
 
+/* ── SCROLL ARROW ── */
+.scroll-arrow {
+	font-size: 2.5rem;
+	color: #222222;
+	text-align: center;
+	padding: 12px 0 4px;
+	animation: bounce 1.2s ease-in-out infinite;
+	-webkit-user-select: none;
+	user-select: none;
+}
+@keyframes bounce {
+	0%, 100% { translate: 0 0; }
+	50%       { translate: 0 10px; }
+}
+
 /* ── INFO FOOTER ── */
 .info-footer {
 	width: 100%;

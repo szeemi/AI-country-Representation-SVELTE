@@ -6,7 +6,8 @@
 
 	// ── Responsive state ──
 	let mb = $state(window.innerWidth <= 540);
-	let chartSvg = $state(null);
+	let chartSvg  = $state(null);
+	let chartWrap = $state(null);
 	let hoveredIdx = $state(-1);
 	let tooltip = $state({
 		visible: false, x: 0, y: 0,
@@ -85,13 +86,31 @@
 			};
 		});
 
-		// All bubbles start and end together
-		const BUBBLE_DUR = 1000;
-		const bubbles = bubblesRaw.map(b => ({ ...b, animDelay: CHART_START_DELAY, animDur: BUBBLE_DUR }));
-
-		const lastBubbleEnd = CHART_START_DELAY + BUBBLE_DUR + 1500; // 1.5s pause before categories
+		// All chart delays relative to scroll trigger (t=0)
+		const DARK_BASE_DUR = 250;   // dark circles fade in first
+		const YELLOW_DELAY  = 250;   // yellow starts after dark
+		const BUBBLE_DUR    = 400;
+		const CAT_BAR_STEP  = 1200;
 		const catOrder = { over: 0, inline: 1, under: 2 };
-		const CAT_BAR_STEP = 1200; // ms between each category group
+
+		// Stagger: biggest first, sequential
+		const maxRvv = Math.max(...bubblesRaw.map(b => b.rvv));
+		const sorted = [...bubblesRaw].sort((a, b) => b.rvv - a.rvv);
+		let cumDelay = YELLOW_DELAY;
+		const delayMap = new Map();
+		sorted.forEach(b => {
+			delayMap.set(b.idx, cumDelay);
+			cumDelay += Math.round(BUBBLE_DUR * (b.rvv / maxRvv));
+		});
+
+		const bubbles = bubblesRaw.map(b => {
+			const animDelay = delayMap.get(b.idx);
+			const animDur   = Math.round(BUBBLE_DUR * (b.rvv / maxRvv));
+			return { ...b, animDelay, animDur, labelDelay: animDelay + animDur, darkBaseDur: DARK_BASE_DUR };
+		});
+
+		const lastBubbleEnd = Math.max(...bubbles.map(b => b.animDelay + b.animDur));
+		const CAT_START = lastBubbleEnd + 1500;
 
 		// Category runs
 		const catRuns = [];
@@ -121,7 +140,7 @@
 					cfg, lx, lw, midX: lx + lw / 2,
 					lineY: info.lineY, LINE_H, labelText, CAT_FONT, CAT_LABEL_GAP,
 					showLabel: labelText.length * CAT_FONT * 0.82 < lw - 6,
-					catDelay: lastBubbleEnd + catOrder[run.cat] * CAT_BAR_STEP,
+					catDelay: CAT_START + catOrder[run.cat] * CAT_BAR_STEP,
 				});
 			});
 		});
@@ -176,22 +195,50 @@
 
 	const LEGEND_PRE_PAUSE        = 2000;             // pause before legend starts
 	const LEGEND_DARK_LINE_DELAY  = LEGEND_PRE_PAUSE;
-	const LEGEND_DARK_LINE_DUR    = 400;
+	const LEGEND_DARK_LINE_DUR    = 800;
 	const LEGEND_DELAY            = LEGEND_DARK_LINE_DELAY + LEGEND_DARK_LINE_DUR;
-	const LEGEND_DUR              = 600;
+	const LEGEND_DUR              = 1200;
 	const LEGEND_LABEL_DELAY      = LEGEND_DELAY + LEGEND_DUR;
-	const LEGEND_POST_PAUSE       = 1000;             // pause after legend before chart
-	const CHART_START_DELAY       = LEGEND_LABEL_DELAY + 300 + LEGEND_POST_PAUSE;
+	const LEGEND_POST_PAUSE       = 1000;
+	const LEGEND_DONE_AT          = LEGEND_LABEL_DELAY + 300; // when legend fully finishes
 
-	// ── Replay key (R to restart) ──
-	let animKey = $state(0);
+	// ── Animation keys ──
+	let animKey      = $state(0); // legend
+	let chartAnimKey = $state(0); // chart (scroll-triggered)
 
+	// R key replays both
 	$effect(() => {
 		function onKey(e) {
-			if (e.key === 'r' || e.key === 'R') animKey++;
+			if (e.key === 'r' || e.key === 'R') { animKey++; chartAnimKey++; }
 		}
 		window.addEventListener('keydown', onKey);
 		return () => window.removeEventListener('keydown', onKey);
+	});
+
+	// Fire chart only when user scrolls it into view.
+	// Observer starts only AFTER legend is done to avoid firing on page load.
+	let showArrow = $state(false);
+
+	$effect(() => {
+		if (!chartWrap) return;
+		let observer;
+		// Show arrow after legend, then start watching for scroll
+		const arrowTimer = setTimeout(() => {
+			showArrow = true;
+			observer = new IntersectionObserver(entries => {
+				if (entries[0].isIntersecting) {
+					showArrow = false;
+					chartAnimKey++;
+					observer.disconnect();
+				}
+			}, { threshold: 0, rootMargin: '0px 0px -180px 0px' });
+			observer.observe(chartWrap);
+		}, LEGEND_DONE_AT + 300);
+
+		return () => {
+			clearTimeout(arrowTimer);
+			if (observer) observer.disconnect();
+		};
 	});
 
 	// ── Tooltip ──
@@ -257,8 +304,7 @@
 <div class="header">
 	<div>
 		<div class="eyebrow">EU AI Ecosystem · 2025 · Geographic Analysis</div>
-		<h1>Countries<br />Over &amp; Under<br />Represented<br />in AI Funding<span class="trail">_</span></h1>
-		<p class="subtitle">Actual vs GDP-Weighted Expected Funding</p>
+		<h1>AI Funding<br />in the EU<span class="trail">_</span></h1>
 	</div>
 	<div class="yblock"></div>
 </div>
@@ -293,13 +339,18 @@
 			<text
 				use:fadeIn={{ delay: LEGEND_DARK_LINE_DELAY }}
 				x="118" y="48" font-family="PT Sans, sans-serif" font-size={layout.legendFs} fill="#555" dominant-baseline="middle"
-			>expected funding</text>
+			>expected funding (GDP-Weighted)</text>
 		{/key}
 	</svg>
 </div>
 
+<!-- SCROLL ARROW -->
+{#if showArrow}
+	<div class="scroll-arrow">↓</div>
+{/if}
+
 <!-- CHART -->
-<div class="chart-wrap">
+<div class="chart-wrap" bind:this={chartWrap}>
 	<svg
 		bind:this={chartSvg}
 		id="chart-svg"
@@ -312,7 +363,8 @@
 			</filter>
 		</defs>
 
-		{#key animKey}
+		{#if chartAnimKey > 0}
+		{#key chartAnimKey}
 		{#each layout.bubbles as b (b.idx)}
 			<g
 				style="cursor:pointer"
@@ -330,8 +382,9 @@
 				/>
 
 				{#if b.over1}
-					<!-- Solid dark base — visible immediately with correct colour -->
+					<!-- Solid dark base — fades in first -->
 					<circle
+						use:fadeIn={{ delay: 0, duration: b.darkBaseDur }}
 						cx={b.cx} cy={b.cyBas} r={b.rb}
 						fill="#333333" stroke="none" pointer-events="none"
 					/>
@@ -349,6 +402,7 @@
 					/>
 				{:else}
 					<circle
+						use:fadeIn={{ delay: 0, duration: b.darkBaseDur }}
 						cx={b.cx} cy={b.cyBas} r={b.rb}
 						fill="#333333" stroke="#333333" stroke-width="0.25" pointer-events="none"
 					/>
@@ -367,17 +421,18 @@
 					pointer-events="none"
 				/>
 
-				<!-- Ratio label — fades in when its yellow bubble finishes -->
+				<!-- Ratio label — fades in when yellow finishes -->
 				<text
-					use:fadeIn={{ delay: b.animDelay + b.animDur }}
+					use:fadeIn={{ delay: b.labelDelay }}
 					x={b.cx} y={b.bigTop - 7}
 					text-anchor="middle" font-size={b.vSz}
 					font-family="PT Sans, sans-serif" font-weight="700"
 					fill="#222" pointer-events="none"
 				>{fmtRatio(b.d.ratio)}</text>
 
-				<!-- Country name -->
+				<!-- Country name — fades in with ratio label -->
 				<text
+					use:fadeIn={{ delay: b.labelDelay }}
 					x={b.cx} y={b.nameY}
 					text-anchor="middle" font-size={layout.NAME_FONT}
 					font-family="PT Sans, sans-serif" fill="#333"
@@ -385,10 +440,8 @@
 				>{b.name}</text>
 			</g>
 		{/each}
-		{/key}
 
 		<!-- Category lines — appear after all bubbles, one group at a time -->
-		{#key animKey}
 		{#each layout.catRuns as run (run.key)}
 			<rect
 				use:fadeIn={{ delay: run.catDelay, duration: 800 }}
@@ -405,6 +458,7 @@
 			{/if}
 		{/each}
 		{/key}
+		{/if}
 	</svg>
 </div>
 
